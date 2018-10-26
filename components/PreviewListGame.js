@@ -196,7 +196,11 @@ export default class PreviewListGame extends React.PureComponent {
       <Swipeout left={swipeoutLeft} right={swipeoutRight} autoClose={true}>
         <TouchableOpacity
           onPress={() => {
-            navigate('Game', { game: this.props.game })
+            navigate('Game', { 
+              game: this.props.game, 
+              userSelection: this.props.userSelection, 
+              setUserSelection: this.props.setUserSelection
+            })
           }}
         >
           <View

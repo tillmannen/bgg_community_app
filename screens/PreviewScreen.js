@@ -68,6 +68,8 @@ class PreviewListScreen extends React.Component {
   setUserSelection = (itemId, selection) => {
     let { userSelections } = this.state
 
+    console.log('bubble bobble', itemId, selection)
+
     if (userSelections) {
       if (userSelections[itemId]) {
         Object.assign(userSelections[itemId], selection)

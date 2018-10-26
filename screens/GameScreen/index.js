@@ -1,19 +1,52 @@
 import Sentry from 'sentry-expo'
 import React from 'react'
-import { StyleSheet, Image, View, Text, ScrollView } from 'react-native'
+import { StyleSheet, TouchableOpacity, Image, View, Text, ScrollView } from 'react-native'
 import { Icon, Button } from 'react-native-elements'
 import HTMLView from 'react-native-htmlview'
 
+import { priorities } from '../../shared/data'
 import ImageList from './image_list'
 import { fetchJSON } from '../../shared/HTTP'
 
 export default class GameScreen extends React.Component {
-  state = {
-    game: {},
+  // constructor(props ){
+  //   super(props)
 
-    stats: { item: { rankinfo: [] } },
-    imageModalIndex: null
-  }
+  //   let userSelection = props.userSelection || {}
+
+  //   let notes = {}
+  //   if (userSelection.notes !== '') {
+  //     try {
+  //       notes = JSON.parse(userSelection.notes)
+  //     } catch (e) {
+  //       // parse failed, so user must have a string note - convert to our format
+  //       notes = {
+  //         text: userSelection.notes
+  //       }
+  //     }
+  //   }
+
+  //   this.state = {
+  //     game: {},
+
+  //     stats: { item: { rankinfo: [] } },
+  //     imageModalIndex: null,
+  //     userSelection: {
+  //       notes,
+  //       priority: userSelection.priority
+  //     },
+  
+  //   }
+  // }
+
+    state = {
+      game: {},
+
+      stats: { item: { rankinfo: [] } },
+      imageModalIndex: null,
+      userSelection: {},
+    }
+
 
   static navigationOptions = ({ navigation }) => ({
     title: navigation.state.params.game.name
@@ -21,9 +54,14 @@ export default class GameScreen extends React.Component {
 
   static getDerivedStateFromProps(props, state) {
     const game = props.navigation.state.params.game
+    let userSelection = props.navigation.state.params.userSelection || {}
+
+    if(!userSelection.priority){
+      userSelection.priority = -1;
+    }
 
     if (game && game !== state.game) {
-      return { game }
+      return { game,  userSelection}
     }
 
     // Return null to indicate no change to state.
@@ -50,6 +88,8 @@ export default class GameScreen extends React.Component {
     const stats = await fetchJSON(url)
     this.setState({ stats })
   }
+
+
 
   _renderHeaderRank = () => {
     let {
@@ -265,11 +305,88 @@ export default class GameScreen extends React.Component {
     }
   }
 
+  persistUserSelection = async changedAttrs => {
+    const { userSelection } = this.state
+    const { goBack } = this.props.navigation;
+    const itemId = userSelection.itemid;
+
+    // merge state and changes together
+
+    this.setState({ userSelection: { ...userSelection, ...changedAttrs } })
+
+    const mergedData = {
+      ...userSelection,
+      ...changedAttrs,
+      itemid: itemId
+    }
+
+    const data = {
+      itemid: mergedData.itemid,
+      notes: mergedData.notes,
+      priority: mergedData.priority
+    }
+    
+    // update the user selection on BGG for this item
+    const { message } = await fetchJSON('/api/geekpreviewitems/userinfo', {
+      method: 'POST',
+      body: { data }
+    })
+
+    // check for success
+    if (message === 'Info saved') {
+      // update our main state back in PreviewScreen (to save a reload from BGG)
+      this.props.navigation.state.params.setUserSelection(itemId, data)
+    }
+    goBack();
+  }
+
+  handlePriorityTouch = async priority => {
+    this.persistUserSelection({ priority })
+  }
+
+  _renderButton = (text, color, id, count) => {
+
+    let width = 100 / count;
+
+    return <TouchableOpacity
+      onPress={() => this.handlePriorityTouch(id)}
+      key={id}
+      style={{
+        backgroundColor: color,
+        width: width+'%',
+        height: 50,
+        paddingTop: 20 
+      }}  
+    >
+      <Text
+        style={{
+          textAlign: 'center',
+          color: '#ffffff',
+          fontSize: 12
+        }}
+      >
+      {text}
+      </Text> 
+    </TouchableOpacity>
+  }
+
   render = () => {
     const { navigate } = this.props.navigation
     const { params } = this.props.navigation.state
     const { game: { item: game } = {} } = this.state
     const images = game ? game.images : {}
+    const {
+      userSelection: { priority }
+    } = this.state
+
+    let buttons = []
+    let prios = priorities.filter(p => ![-1, priority].includes(p.id))
+
+    for (let p of prios) {
+      let count = prios.length
+      let element = this._renderButton(p.name, p.color, p.id, count)
+      buttons.push(element)
+    }
 
     return (
       <ScrollView>
@@ -292,6 +409,15 @@ export default class GameScreen extends React.Component {
               onPress={() => navigate('AddTo', { game })}
               title="Add To ..."
             />
+          </View>
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              justifyContent: 'space-between'
+            }}  
+          >
+            {buttons}   
           </View>
           <View style={{ padding: 10, backgroundColor: '#ffffff' }}>
             <ImageList objectId={game ? game.objectid : null} />
